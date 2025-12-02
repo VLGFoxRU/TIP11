@@ -70,6 +70,8 @@ CRUD - Create, Read, Update, Delete - четыре базовые операци
 Создание заметки:
 <img width="1379" height="617" alt="image" src="https://github.com/user-attachments/assets/99e50838-dde9-42f8-9494-194746af9946" />
 
+
+
 # Примеры кода
 
 cmd/api/main.go - Точка входа
@@ -77,20 +79,23 @@ cmd/api/main.go - Точка входа
 package main
 
 import (
-  "log"
-  "net/http"
-  "example.com/pz11-notes-api/internal/http"
-  "example.com/pz11-notes-api/internal/http/handlers"
-  "example.com/pz11-notes-api/internal/repo"
+	"log"
+	"net/http"
+
+	"example.com/pz11-notes-api/internal/http"
+	"example.com/pz11-notes-api/internal/repo"
 )
 
 func main() {
-  repo := repo.NewNoteRepoMem()
-  h := &handlers.Handler{Repo: repo}
-  r := httpx.NewRouter(h)
+	// Инициализация репозитория
+	noteRepo := repo.NewNoteRepoMem()
 
-  log.Println("Server started at :8080")
-  log.Fatal(http.ListenAndServe(":8080", r))
+	// Создание маршрутизатора
+	r := router.NewRouter(noteRepo)
+
+	// Запуск сервера
+	log.Println("Server started at :8080")
+	log.Fatal(http.ListenAndServe(":8080", r))
 }
 ```
 
@@ -101,11 +106,21 @@ package core
 import "time"
 
 type Note struct {
-  ID        int64
-  Title     string
-  Content   string
-  CreatedAt time.Time
-  UpdatedAt *time.Time
+	ID        int64      `json:"id"`
+	Title     string     `json:"title"`
+	Content   string     `json:"content"`
+	CreatedAt time.Time  `json:"createdAt"`
+	UpdatedAt *time.Time `json:"updatedAt,omitempty"`
+}
+
+type CreateNoteRequest struct {
+	Title   string `json:"title"`
+	Content string `json:"content"`
+}
+
+type UpdateNoteRequest struct {
+	Title   string `json:"title,omitempty"`
+	Content string `json:"content,omitempty"`
 }
 ```
 
@@ -114,27 +129,119 @@ internal/http/handlers/notes.go - HTTP-обработчики
 package handlers
 
 import (
-  "encoding/json"
-  "net/http"
-  "example.com/pz11-notes-api/internal/core"
-  "example.com/pz11-notes-api/internal/repo"
+	"encoding/json"
+	"net/http"
+	"strconv"
+
+	"github.com/go-chi/chi/v5"
+	"example.com/pz11-notes-api/internal/core"
+	"example.com/pz11-notes-api/internal/repo"
 )
 
-type Handler struct {
-  Repo *repo.NoteRepoMem
+type NoteHandler struct {
+	repo *repo.NoteRepoMem
 }
 
-func (h *Handler) CreateNote(w http.ResponseWriter, r *http.Request) {
-  var n core.Note
-  if err := json.NewDecoder(r.Body).Decode(&n); err != nil {
-    http.Error(w, "Invalid input", http.StatusBadRequest)
-    return
-  }
-  id, _ := h.Repo.Create(n)
-  n.ID = id
-  w.Header().Set("Content-Type", "application/json")
-  w.WriteHeader(http.StatusCreated)
-  json.NewEncoder(w).Encode(n)
+func NewNoteHandler(repo *repo.NoteRepoMem) *NoteHandler {
+	return &NoteHandler{repo: repo}
+}
+
+// CreateNote - POST /api/v1/notes
+func (h *NoteHandler) CreateNote(w http.ResponseWriter, r *http.Request) {
+	var req core.CreateNoteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if req.Title == "" || req.Content == "" {
+		http.Error(w, "Title and content are required", http.StatusBadRequest)
+		return
+	}
+
+	note := core.Note{
+		Title:   req.Title,
+		Content: req.Content,
+	}
+
+	id, err := h.repo.Create(note)
+	if err != nil {
+		http.Error(w, "Failed to create note", http.StatusInternalServerError)
+		return
+	}
+
+	note.ID = id
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(note)
+}
+
+// GetNote - GET /api/v1/notes/{id}
+func (h *NoteHandler) GetNote(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	note, err := h.repo.GetByID(id)
+	if err != nil {
+		http.Error(w, "Note not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(note)
+}
+
+// GetAllNotes - GET /api/v1/notes
+func (h *NoteHandler) GetAllNotes(w http.ResponseWriter, r *http.Request) {
+	notes := h.repo.GetAll()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(notes)
+}
+
+// UpdateNote - PATCH /api/v1/notes/{id}
+func (h *NoteHandler) UpdateNote(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	var req core.UpdateNoteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	note, err := h.repo.Update(id, req)
+	if err != nil {
+		http.Error(w, "Note not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(note)
+}
+
+// DeleteNote - DELETE /api/v1/notes/{id}
+func (h *NoteHandler) DeleteNote(w http.ResponseWriter, r *http.Request) {
+	idStr := chi.URLParam(r, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid ID", http.StatusBadRequest)
+		return
+	}
+
+	if err := h.repo.Delete(id); err != nil {
+		http.Error(w, "Note not found", http.StatusNotFound)
+		return
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 }
 ```
 
