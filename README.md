@@ -10,26 +10,6 @@
 # Версия Go
 <img width="317" height="55" alt="image" src="https://github.com/user-attachments/assets/43f9087b-95b9-4c7d-86e9-746258c45c63" />
 
-# Команды запуска и переменные окружения
-
-Linux/macOS:
-```
-export JWT_SECRET="dev-secret"
-export ACCESS_TTL="15m"
-export REFRESH_TTL="168h"
-export APP_PORT="8080"
-go run ./cmd/server
-```
-
-Windows PowerShell:
-```
-$env:JWT_SECRET="dev-secret"
-$env:ACCESS_TTL="15m"
-$env:REFRESH_TTL="168h"
-$env:APP_PORT="8080"
-go run ./cmd/server
-```
-
 # Цели:
 1.	Освоить принципы проектирования REST API.
 2.	Научиться разрабатывать структуру проекта backend-приложения на Go.
@@ -40,61 +20,248 @@ go run ./cmd/server
 # Структура проекта
 Дерево структуры проекта: 
 ```
-pz10-auth/
-├── go.mod
-├── go.sum
-├── cmd/server/main.go
+pz11-notes-api/
+├── cmd/
+│   └── api/
+│       └── main.go
 ├── internal/
 │   ├── core/
-│   │   ├── user.go
-│   │   └── service.go
+│   │   ├── note.go
+│   │   └── service/
+│   │       └── note_service.go
 │   ├── http/
 │   │   ├── router.go
-│   │   └── middleware/
-│   │       ├── authn.go
-│   │       └── authz.go
-│   ├── repo/
-│   │   └── user_mem.go
-│   └── platform/
-│       ├── config/config.go
-│       └── jwt/jwt.go
-└── README.md
+│   │   └── handlers/
+│   │       └── notes.go
+│   └── repo/
+│       └── note_mem.go
+├── api/
+│   └── openapi.yaml
+├── go.mod
+└── go.sum
 ```
+
+# Теоретические положения REST API и CRUD
+
+2.1 REST API - Понятие и принципы
+REST (Representational State Transfer) - это архитектурный стиль для проектирования распределённых систем, основанный на стандартном протоколе HTTP.
+
+Основные принципы REST:
+| Принцип | Описание | Пример |
+|---------|---------|--------|
+| **Ресурсность** | Все данные представлены как ресурсы с уникальными URI | `/api/v1/notes/{id}` |
+| **Методы HTTP** | Использование стандартных HTTP-методов для операций | GET, POST, PATCH, DELETE |
+| **Stateless** | Каждый запрос содержит полную информацию для обработки | Не требует сессий |
+| **JSON формат** | Обмен данными в формате JSON | `{"id": 1, "title": "Note"}` |
+| **Единообразие** | Одинаковая структура запросов и ответов | Предсказуемое API |
+
+
+CRUD - Create, Read, Update, Delete - четыре базовые операции для работы с данными.
+| CRUD | HTTP | Эндпоинт | Статус | Описание |
+|------|------|----------|--------|---------|
+| **Create** | POST | `/api/v1/notes` | 201 | Создание новой заметки |
+| **Read (одна)** | GET | `/api/v1/notes/{id}` | 200 | Получение одной заметки |
+| **Read (все)** | GET | `/api/v1/notes` | 200 | Получение всех заметок |
+| **Update** | PATCH | `/api/v1/notes/{id}` | 200 | Обновление заметки |
+| **Delete** | DELETE | `/api/v1/notes/{id}` | 204 | Удаление заметки |
 
 # Скриншоты
 
-Успешный /login администратора:
+Создание заметки:
+<img width="1379" height="617" alt="image" src="https://github.com/user-attachments/assets/99e50838-dde9-42f8-9494-194746af9946" />
 
-<img width="1380" height="638" alt="image" src="https://github.com/user-attachments/assets/8345ceae-8e0d-4cdf-9e26-4d3894701bf7" />
+# Примеры кода
 
-Успешный /login пользователя:
+cmd/api/main.go - Точка входа
+```
+package main
 
-<img width="1369" height="647" alt="image" src="https://github.com/user-attachments/assets/144c77c6-282a-450c-8036-cfdd67d354bd" />
+import (
+  "log"
+  "net/http"
+  "example.com/pz11-notes-api/internal/http"
+  "example.com/pz11-notes-api/internal/http/handlers"
+  "example.com/pz11-notes-api/internal/repo"
+)
 
-/me администратора:
+func main() {
+  repo := repo.NewNoteRepoMem()
+  h := &handlers.Handler{Repo: repo}
+  r := httpx.NewRouter(h)
 
-<img width="1371" height="557" alt="image" src="https://github.com/user-attachments/assets/0380c76a-c4e3-4c28-bcef-609b6a4b7d4e" />
+  log.Println("Server started at :8080")
+  log.Fatal(http.ListenAndServe(":8080", r))
+}
+```
 
-/admin/stats администратора:
+internal/core/note.go - Модель данных
+```
+package core
 
-<img width="1363" height="569" alt="image" src="https://github.com/user-attachments/assets/20e228ef-93c5-4c32-ba5c-5e5bcb7d9e75" />
+import "time"
 
-403 для user на /admin/stats:
+type Note struct {
+  ID        int64
+  Title     string
+  Content   string
+  CreatedAt time.Time
+  UpdatedAt *time.Time
+}
+```
 
-<img width="1368" height="513" alt="image" src="https://github.com/user-attachments/assets/7d944520-b2a4-43cd-840c-70bb29b9efad" />
+internal/http/handlers/notes.go - HTTP-обработчики
+```
+package handlers
 
-refresh-флоу (старый/новый access):
+import (
+  "encoding/json"
+  "net/http"
+  "example.com/pz11-notes-api/internal/core"
+  "example.com/pz11-notes-api/internal/repo"
+)
 
-<img width="1359" height="626" alt="image" src="https://github.com/user-attachments/assets/81343d14-83f3-4577-a291-c6a69454bfa3" />
+type Handler struct {
+  Repo *repo.NoteRepoMem
+}
 
-<img width="1384" height="559" alt="image" src="https://github.com/user-attachments/assets/15c41d49-3a30-4422-9774-8c9b5ef2cad4" />
+func (h *Handler) CreateNote(w http.ResponseWriter, r *http.Request) {
+  var n core.Note
+  if err := json.NewDecoder(r.Body).Decode(&n); err != nil {
+    http.Error(w, "Invalid input", http.StatusBadRequest)
+    return
+  }
+  id, _ := h.Repo.Create(n)
+  n.ID = id
+  w.Header().Set("Content-Type", "application/json")
+  w.WriteHeader(http.StatusCreated)
+  json.NewEncoder(w).Encode(n)
+}
+```
 
 # Краткие выводы
-
-Реализована полнофункциональная JWT-аутентификация с поддержкой двух типов токенов: short-lived access (15 мин) и long-lived refresh (7 дней). При логине система выдаёт обе токена; access используется для доступа к защищённым ресурсам, refresh позволяет обновить пару без повторного логина. Система хранит отозванные refresh-токены в in-memory blacklist, что позволяет реализовать корректный logout.
-
-Реализована ABAC-авторизация (Attribute-Based Access Control) на примере эндпоинта /api/v1/users/{id}: пользователи с ролью user могут получить только собственный профиль (id == sub из токена), в то время как администраторы имеют полный доступ. Архитектура использует middleware-цепочку: AuthN (аутентификация через JWT) → AuthZ (авторизация через RBAC/ABAC), что разделяет ответственность и облегчает тестирование.
+Успешно разработан REST API для управления заметками на языке Go с реализацией CRUD-операций и применением слоистой архитектуры (обработчики → сервис → репозиторий).
 
 # Ответы на контрольные вопросы
 
+1.	Что означает аббревиатура REST и в чём её суть?
 
+REST (Representational State Transfer) - это архитектурный стиль для построения распределённых веб-приложений.
+
+Суть REST:
+
+- Использование стандартных HTTP-методов (GET, POST, PATCH, DELETE)
+
+- Представление данных как ресурсов с уникальными URI
+
+- Отсутствие состояния (stateless) - каждый запрос независим
+
+- Единообразный интерфейс для всех операций
+
+- Использование стандартных HTTP-кодов ответов
+
+Пример: /api/v1/notes/1 - это ресурс (заметка с ID=1), с которым работают через стандартные HTTP-методы.
+
+2.	Как связаны CRUD-операции и методы HTTP?
+
+| CRUD | HTTP | Описание |
+|------|------|---------|
+| **Create** | POST | Создание нового ресурса |
+| **Read** | GET | Получение ресурса |
+| **Update** | PATCH/PUT | Изменение ресурса |
+| **Delete** | DELETE | Удаление ресурса |
+
+3.	Для чего нужна слоистая архитектура (handler → service → repository)?
+
+Слоистая архитектура разделяет ответственность:
+
+- HTTP Handlers - парсинг запросов, валидация, форматирование ответов
+
+- Service (Core) - бизнес-логика, обработка данных
+
+- Repository - работа с данными (в памяти, БД, файлы)
+
+Преимущества:
+
+- Разделение ответственности - каждый слой делает одно
+
+- Тестируемость - можно тестировать каждый слой отдельно
+
+- Реиспользуемость - service можно использовать в разных контекстах
+
+- Масштабируемость - легко добавлять новые функции
+
+- Гибкость - можно менять реализацию (например, in-memory → БД)
+
+4.	Что означает принцип «stateless» в REST API?
+
+Stateless означает, что сервер НЕ хранит состояние клиента между запросами.
+
+Преимущества:
+
+- Масштабируемость - можно распределить на несколько серверов
+
+- Надёжность - отказ одного сервера не теряет состояние
+
+- Производительность - не нужно искать сессию
+
+5.	Почему важно использовать стандартные коды ответов HTTP?
+
+Стандартные HTTP-коды - это язык, на котором общаются клиент и сервер.
+
+| Код | Статус | Значение |
+|-----|--------|----------|
+| 200 | OK | Успешное выполнение |
+| 201 | Created | Ресурс создан |
+| 204 | No Content | Операция выполнена, контент не возвращается |
+| 400 | Bad Request | Ошибка в запросе |
+| 404 | Not Found | Ресурс не найден |
+| 500 | Internal | Ошибка сервера |
+
+Почему это важно:
+
+- Предсказуемость - клиент знает, как обработать ответ
+
+- Совместимость - работает с любыми HTTP-библиотеками
+
+- Автоматизация - фреймворки и инструменты понимают коды
+
+- Debugging - быстро понять, в чём проблема
+
+6.	Как можно добавить аутентификацию в REST API?
+
+Основные методы:
+
+1. JWT (JSON Web Token) - наиболее распространённый:
+```
+curl -H "Authorization: Bearer eyJhbGc..." http://localhost:8080/api/v1/notes
+```
+
+2. API Key:
+```
+curl -H "X-API-Key: abc123xyz" http://localhost:8080/api/v1/notes
+```
+
+3. OAuth 2.0 - для социальной аутентификации
+
+В коде:
+```
+func (h *NoteHandler) GetNote(w http.ResponseWriter, r *http.Request) {
+	// Проверка токена в заголовке
+	token := r.Header.Get("Authorization")
+	if token == "" {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	// Верификация токена...
+	// Если валиден, обработать запрос
+}
+```
+
+7.	В чём преимущество версионирования API (например, /api/v1/)?
+
+Версионирование позволяет развивать API без нарушения совместимости.
+
+```
+/api/v1/notes  - Старая версия (для старых клиентов)
+/api/v2/notes  - Новая версия (с улучшениями)
+```
