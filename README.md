@@ -68,9 +68,19 @@ CRUD - Create, Read, Update, Delete - четыре базовые операци
 # Скриншоты
 
 Создание заметки:
-<img width="1379" height="617" alt="image" src="https://github.com/user-attachments/assets/99e50838-dde9-42f8-9494-194746af9946" />
+<img width="1364" height="580" alt="image" src="https://github.com/user-attachments/assets/3bc0b686-aa57-45e2-ae4a-9de6e05c54c6" />
 
+Получение всех заметок:
+<img width="1356" height="614" alt="image" src="https://github.com/user-attachments/assets/3870ecfb-91b5-4067-9e7b-3823c1aff687" />
 
+Получение заметки по ID:
+<img width="1357" height="594" alt="image" src="https://github.com/user-attachments/assets/128ea21a-2dd3-4b96-8b18-242827026ea5" />
+
+Обновление заметки:
+<img width="1361" height="608" alt="image" src="https://github.com/user-attachments/assets/f4b860da-6473-47f8-849a-8482c8164400" />
+
+Удаление заметки:
+<img width="1371" height="475" alt="image" src="https://github.com/user-attachments/assets/5faa66c2-4ece-45ec-8b63-70d8b8097b78" />
 
 # Примеры кода
 
